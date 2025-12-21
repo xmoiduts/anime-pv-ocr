@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables (Secrets)
+.env
+
+# Media files
+medias/
+*.mp4
+*.mkv
+*.avi
+*.mov
+
+# Outputs and generated files
+outputs/
+
+# Local configuration
+config.json
+
+# IDE settings
+.vscode/
+.idea/
+

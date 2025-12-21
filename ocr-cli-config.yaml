@@ -1,0 +1,75 @@
+scene-detector:
+  model: gemini-2.5-flash-lite
+  prompt_file: prompts/gemini-scene-detector.md
+  media_resolution: MEDIA_RESOLUTION_MEDIUM # Medium: 256 tokens per image
+  # thinking_level: medium # 2.5 flash lite does not support thinking level yet
+  grid_rows: 2
+  grid_cols: 2
+  media_dir: medias
+  output_dir: outputs
+
+spotter:
+  model: gemini-3-flash-preview
+  prompt_file: prompts/gemini-subtitle-spotter.md
+  media_resolution: MEDIA_RESOLUTION_HIGH
+  # media_resolution: specify the resolution of all images passed to "spotter"
+  # for gemini 3 series, value range: `MEDIA_RESOLUTION_(LOW|MEDIUM|HIGH|ULTRA_HIGH|UNSPECIFIED)`
+  #thinking_level: medium
+  # thinking_level: specify the thinking level of the "spotter"
+  # gemini 3 series: {minimal, low, medium, high}
+  #   flash: {minimal, low, medium, high}; pro: {low, high}
+  grid_rows: 4
+  grid_cols: 3
+  media_dir: medias
+  output_dir: outputs
+  #base_url: https://your-custom-proxy.com
+
+spotter-dig-hard-samples:
+  model: gemini-3-flash-preview
+  prompt_file: prompts/gemini-small-subtitle-spotter.md # Specialized prompt for small subtitles
+  stripping: 5
+  grid_rows: 5
+  image_width: 1080
+  media_resolution: MEDIA_RESOLUTION_MEDIUM # single full frame is enough in 550 tokens, so medium is enough
+  media_dir: medias
+  output_dir: outputs
+  # timestamp_suffix: "" # optional, CLI -i suffix
+  avoid_before: 3
+  avoid_after: 3
+  
+adhoc-ask-clarity: # ask models: under this prompt, can you see any subtitle section that worth you report positive?
+  model: gemini-3-flash-preview
+  prompt_file: prompts/pyramid-ask-clarity.md # Default to spotter prompt if none given
+  spotter_prompt_file: prompts/gemini-subtitle-spotter.md
+  media_resolution: MEDIA_RESOLUTION_HIGH
+  folder: outputs/<media_name>/pyramid_712_3x4
+
+
+# recognizer:
+#   model: gemini-3-flash
+#   prompt_file: prompts/gemini-ocr.md
+#   # grid_rows: 1
+#   # grid_cols: 1
+
+fee:
+  exchange_rate: 7.2
+
+model:
+  gemini-3-flash-preview:
+    gemini-generation: 3
+    # thinking_level: {minimal, low, medium, high}
+    # media_resolution: MEDIA_RESOLUTION_(LOW|MEDIUM|HIGH|ULTRA_HIGH|UNSPECIFIED)
+    #   for every image:{low: 280, medium: 560, high: 1120, ultra_high: 2240}
+    #   unspecified.image defaults to 560 tokens/img,
+    #   ultra_high are for per-part only
+    price:
+      input: 0.50
+      output: 3.00
+  gemini-2.5-flash-lite:
+    gemini-generation: 2.5
+    price:
+      input: 0.10
+      output: 0.40
+    # thinking_budget: {auto:-1, off:0, yes: "512-24576"}
+    # no thinking_level for gen 2.5
+
