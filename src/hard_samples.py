@@ -1,9 +1,9 @@
 import os
-import re
 import yaml
 import cv2
 import numpy as np
 from pathlib import Path
+from frame_extractor import FrameExtractor
 
 def imread_unicode(path):
     """Read an image from a path that may contain non-ASCII characters (Windows)."""
@@ -15,21 +15,8 @@ def imread_unicode(path):
         print(f"Error reading image {path}: {e}")
         return None
 
-def imwrite_unicode(path, img, quality=95):
-    """Write an image to a path that may contain non-ASCII characters (Windows)."""
-    try:
-        ext = os.path.splitext(path)[1]
-        if not ext:
-            ext = ".jpg"
-        
-        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
-        success, im_buf = cv2.imencode(ext, img, encode_param)
-        if success:
-            im_buf.tofile(path)
-            return True
-    except Exception as e:
-        print(f"Error writing image {path}: {e}")
-    return False
+# imwrite_unicode is now available in FrameExtractor but kept here for compatibility if needed, 
+# or we can switch to FrameExtractor.imwrite_unicode
 
 def find_latest_spotter_result(folder_path, timestamp_suffix=None):
     results_dir = os.path.join(folder_path, "spotter-results")
@@ -37,7 +24,10 @@ def find_latest_spotter_result(folder_path, timestamp_suffix=None):
         print(f"Error: spotter-results directory not found in {folder_path}")
         return None
     
-    yaml_files = [f for f in os.listdir(results_dir) if f.endswith(".yaml") or f.endswith(".yml")]
+    # Exclude digger_results_*.yaml files - those are digger outputs, not spotter outputs
+    yaml_files = [f for f in os.listdir(results_dir) 
+                  if (f.endswith(".yaml") or f.endswith(".yml")) 
+                  and not f.startswith("digger_results_")]
     if not yaml_files:
         print(f"Error: No spotter result YAML files found in {results_dir}")
         return None
@@ -70,15 +60,39 @@ def parse_selected_frames(yaml_path):
         if "frame" in item:
             f_val = int(item["frame"])
             selected.add(f_val)
-            # if "neighboring_frames" in item:
-            #     nf = item["neighboring_frames"]
-            #     if isinstance(nf, list) and len(nf) == 2:
-            #         for f in range(int(nf[0]), int(nf[1]) + 1):
-            #             selected.add(f)
-        
-        # subtitle_selection is now ignored as requested
     
     return selected
+
+def save_dig_hard_results(folder_path, hard_frames, output_image_paths):
+    """Save the list of hard frames to a YAML file for subsequent steps."""
+    results_dir = os.path.join(folder_path, "spotter-results")
+    os.makedirs(results_dir, exist_ok=True)
+    
+    # We use a distinct name for digger results
+    # TODO: Maybe align timestamp with the source spotter result? 
+    # For now, just use current timestamp or a fixed name pattern if we want to overwrite?
+    # Better to use a specific name that ocr-filtered can find.
+    
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = os.path.join(results_dir, f"digger_results_{timestamp}.yaml")
+    
+    data = []
+    # Map image paths to frames? 
+    # The output_image_paths correspond to strips.
+    # We want to record the individual frames that were selected.
+    
+    for frame_id in hard_frames:
+        data.append({
+            "frame": frame_id,
+            "type": "hard_sample"
+        })
+        
+    with open(output_file, "w", encoding="utf-8") as f:
+        yaml.dump(data, f)
+    
+    print(f"Saved dig-hard results to {output_file}")
+    return output_file
 
 def run_spotter_dig_hard_samples(folder_path, media_path, task_config, target_fps, timestamp_suffix=None):
     yaml_path = find_latest_spotter_result(folder_path, timestamp_suffix)
@@ -88,15 +102,11 @@ def run_spotter_dig_hard_samples(folder_path, media_path, task_config, target_fp
     print(f"Using spotter result: {yaml_path}")
     selected_frames = parse_selected_frames(yaml_path)
     
-    cap = cv2.VideoCapture(media_path)
-    if not cap.isOpened():
-        print(f"Error: Could not open video {media_path}")
-        return []
-    
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    duration = total_frames / fps
-    expected_extracted = int(duration * target_fps)
+    # Use FrameExtractor to get video info
+    extractor = FrameExtractor(media_path)
+    fps = extractor.fps
+    total_frames = extractor.total_frames
+    expected_extracted = int(extractor.duration * target_fps)
     
     # Calculate excluded frames based on avoid_before and avoid_after
     avoid_before = task_config.get("avoid_before", 3)
@@ -112,7 +122,6 @@ def run_spotter_dig_hard_samples(folder_path, media_path, task_config, target_fp
     
     if not hard_frames:
         print(f"No hard samples found (all frames were avoided around {len(selected_frames)} spotter selections).")
-        cap.release()
         return []
     
     print(f"Found {len(hard_frames)} hard samples (excluded {len(excluded_frames)} frames around {len(selected_frames)} spotter selections).")
@@ -122,6 +131,15 @@ def run_spotter_dig_hard_samples(folder_path, media_path, task_config, target_fp
     image_width = task_config.get("image_width", 1080)
     
     hard_samples_dir = os.path.join(folder_path, "hard-samples")
+    if os.path.exists(hard_samples_dir):
+        # Clear existing files
+        for f in os.listdir(hard_samples_dir):
+            file_path = os.path.join(hard_samples_dir, f)
+            if os.path.isfile(file_path):
+                try:
+                    os.unlink(file_path)
+                except Exception as e:
+                    print(f"Error deleting {file_path}: {e}")
     os.makedirs(hard_samples_dir, exist_ok=True)
     
     output_image_paths = []
@@ -129,8 +147,8 @@ def run_spotter_dig_hard_samples(folder_path, media_path, task_config, target_fp
     strips_per_image = grid_rows
     num_output_images = (num_hard + strips_per_image - 1) // strips_per_image
     
-    h_orig = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    w_orig = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h_orig = int(extractor.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    w_orig = int(extractor.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     strip_h = h_orig // stripping
     
     # UI settings similar to spotter grid
@@ -140,8 +158,7 @@ def run_spotter_dig_hard_samples(folder_path, media_path, task_config, target_fp
     # Scale factors
     scale = image_width / w_orig
     final_strip_h = int(strip_h * scale)
-    final_text_h = int(text_h) # Keep text height fixed or scale? 
-    # In spotter it was fixed 60 for 1000px width.
+    final_text_h = int(text_h)
     
     cell_h = final_text_h + final_strip_h
     canvas_w = image_width + 2 * margin
@@ -160,10 +177,14 @@ def run_spotter_dig_hard_samples(folder_path, media_path, task_config, target_fp
             frame_id = hard_frames[j]
             strip_idx = j % stripping # offset 0 -> part 0, offset 1 -> part 1...
             
-            # Extract frame from video
+            # Extract frame using extractor logic directly or manually since we need strips
+            # Since we need strips, FrameExtractor.extract_frames is not directly useful unless we modify it 
+            # to yield frames by index. But we have frame_id.
+            
             target_frame_idx = (frame_id - 1) * frame_interval
-            cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame_idx)
-            ret, frame = cap.read()
+            extractor.cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame_idx)
+            ret, frame = extractor.cap.read()
+            
             if not ret:
                 print(f"Warning: Could not read frame {frame_id} (idx {target_frame_idx})")
                 continue
@@ -199,9 +220,12 @@ def run_spotter_dig_hard_samples(folder_path, media_path, task_config, target_fp
 
         output_name = f"hard_{i+1:03d}_{frames_in_this_image[0]}-{frames_in_this_image[-1]}.jpg"
         output_path = os.path.join(hard_samples_dir, output_name)
-        imwrite_unicode(output_path, canvas)
+        FrameExtractor.imwrite_unicode(output_path, canvas)
         output_image_paths.append(output_path)
         
-    cap.release()
+    # Save the YAML results
+    save_dig_hard_results(folder_path, hard_frames, output_image_paths)
+        
     return output_image_paths
+
 

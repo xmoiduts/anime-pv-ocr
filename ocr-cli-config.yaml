@@ -1,6 +1,9 @@
+# task_resolver.py contains task-specific hardcoded logics,
+# when defining a new task, you need to optionally add processor logic to it.
 scene-detector:
+# ad-hoc, result not promising.
   model: gemini-2.5-flash-lite
-  prompt_file: prompts/gemini-scene-detector.md
+  prompt_file: prompts/scene/gemini-scene-detector.md
   media_resolution: MEDIA_RESOLUTION_MEDIUM # Medium: 256 tokens per image
   # thinking_level: medium # 2.5 flash lite does not support thinking level yet
   grid_rows: 2
@@ -8,9 +11,13 @@ scene-detector:
   media_dir: medias
   output_dir: outputs
 
+# pipeline: please keep this comment
+# media -> spotter -> hard-samples -> ocr-filtered
+
 spotter:
+# key task, a bare multimedia input meets this task first.
   model: gemini-3-flash-preview
-  prompt_file: prompts/gemini-subtitle-spotter.md
+  prompt_file: prompts/spotter/gemini-subtitle-spotter.md
   media_resolution: MEDIA_RESOLUTION_HIGH
   # media_resolution: specify the resolution of all images passed to "spotter"
   # for gemini 3 series, value range: `MEDIA_RESOLUTION_(LOW|MEDIUM|HIGH|ULTRA_HIGH|UNSPECIFIED)`
@@ -24,32 +31,49 @@ spotter:
   output_dir: outputs
   #base_url: https://your-custom-proxy.com
 
-spotter-dig-hard-samples:
+dig-hard-samples:
+# Optional task, placed after spotter to dig out hard samples (small or low-contrast texts).
+# Filters out spotter-selected frames that are likely to be easy to OCR,
+#   and digs from the rest of frames.
   model: gemini-3-flash-preview
-  prompt_file: prompts/gemini-small-subtitle-spotter.md # Specialized prompt for small subtitles
+  prompt_file: prompts/spotter/gemini-small-subtitle-spotter.md # Specialized prompt for small subtitles
   stripping: 5
   grid_rows: 5
-  image_width: 1080
+  image_width: 1280
   media_resolution: MEDIA_RESOLUTION_MEDIUM # single full frame is enough in 550 tokens, so medium is enough
   media_dir: medias
   output_dir: outputs
-  # timestamp_suffix: "" # optional, CLI -i suffix
+  # avoid frames before and after the spotter-selected frames.
   avoid_before: 3
-  avoid_after: 3
-  
+  avoid_after: 2
+
+ocr-filtered:
+# Key task, actually does the OCR.
+  model: gemini-3-flash-preview
+  prompt_file: prompts/ocr/gemini-ocr-filtered.md
+  media_resolution: MEDIA_RESOLUTION_MEDIUM
+  # 1 frame per uploaded file.
+  enable_audio: false
+  media_dir: medias
+  output_dir: outputs
+
 adhoc-ask-clarity: # ask models: under this prompt, can you see any subtitle section that worth you report positive?
   model: gemini-3-flash-preview
-  prompt_file: prompts/pyramid-ask-clarity.md # Default to spotter prompt if none given
-  spotter_prompt_file: prompts/gemini-subtitle-spotter.md
+  prompt_file: prompts/adhoc/pyramid-ask-clarity.md # Default to spotter prompt if none given
+  spotter_prompt_file: prompts/spotter/gemini-subtitle-spotter.md
   media_resolution: MEDIA_RESOLUTION_HIGH
   folder: outputs/<media_name>/pyramid_712_3x4
 
 
-# recognizer:
-#   model: gemini-3-flash
-#   prompt_file: prompts/gemini-ocr.md
-#   # grid_rows: 1
-#   # grid_cols: 1
+# Post-run behavior and pricing defaults
+runtime:
+  idle_exit_seconds: 30 # Countdown before exit if no follow-up is entered
+  enable_post_run_chat: true
+
+# Pricing moved to per-model sections below
+# pricing:
+#   default_input_per_million: 0.10
+#   default_output_per_million: 0.40
 
 fee:
   exchange_rate: 7.2
@@ -72,4 +96,3 @@ model:
       output: 0.40
     # thinking_budget: {auto:-1, off:0, yes: "512-24576"}
     # no thinking_level for gen 2.5
-

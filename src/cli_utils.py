@@ -1,23 +1,10 @@
-import os
 import argparse
-import yaml
-import json
-from dotenv import load_dotenv
+import os
 
-def load_yaml_config(path="ocr-cli-config.yaml"):
-    if not os.path.exists(path):
-        return {}
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
-
-def load_config(path="config.json"):
-    if not os.path.exists(path):
-        return {}
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+from config_loader import load_config, load_env, load_yaml_config
 
 def get_cli_args():
-    load_dotenv()
+    load_env()
     
     # Load YAML config for pass defaults
     yaml_config = load_yaml_config()
@@ -50,7 +37,7 @@ def get_cli_args():
                         help="Range of frames (e.g., '1-300' or '255-')")
     
     parser.add_argument("-p", "--prompt-file", 
-                        default=task_config.get("prompt_file", "prompts/gemini-filter-36grid.md"), 
+                        default=task_config.get("prompt_file", "prompts/filter/gemini-filter-36grid.md"), 
                         help="Path to the prompt markdown file")
     
     parser.add_argument("-m", "--model", 

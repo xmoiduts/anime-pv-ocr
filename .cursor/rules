@@ -1,0 +1,5 @@
+public component:
+  video frame extractor
+many tasks needs to extract video frames individually and not use previous task's generated media files,
+  e.g. using the 12-grid full image for stripping-based hard sample digging while stripping should happen within single frames.
+so you may need to include frame generation logic inside the task code implementation
