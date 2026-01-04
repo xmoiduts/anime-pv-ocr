@@ -1,6 +1,7 @@
 import hashlib
 from typing import List, Optional
 
+from tqdm import tqdm
 import google.genai as genai
 import google.genai.types as types
 from PIL import Image
@@ -54,9 +55,26 @@ def call_gemini(
     is_gemini_3_plus = gemini_generation is not None and gemini_generation >= 3
     use_per_part = is_gemini_3_plus and media_resolution is not None
 
-    print(f"Preparing to upload {len(image_paths)} images (Per-part resolution: {use_per_part})...")
-    for path in image_paths:
+    print(f"Preparing to upload {len(image_paths)} media files (Per-part resolution: {use_per_part})...")
+    for path in tqdm(image_paths, desc="Uploading media"):
         try:
+            lower_path = path.lower()
+            if lower_path.endswith(('.mp3', '.wav', '.aiff', '.aac', '.ogg', '.flac')):
+                mime_type = "audio/mp3"
+                if lower_path.endswith('.wav'): mime_type = "audio/wav"
+                elif lower_path.endswith('.aac'): mime_type = "audio/aac"
+                elif lower_path.endswith('.ogg'): mime_type = "audio/ogg"
+                elif lower_path.endswith('.flac'): mime_type = "audio/flac"
+                
+                with open(path, "rb") as f:
+                    media_bytes = f.read()
+                part = types.Part.from_bytes(
+                    data=media_bytes,
+                    mime_type=mime_type,
+                )
+                contents.append(part)
+                continue
+
             if use_per_part:
                 with open(path, "rb") as f:
                     img_bytes = f.read()
@@ -70,7 +88,7 @@ def call_gemini(
                 img = Image.open(path)
                 contents.append(img)
         except Exception as e:
-            print(f"Error loading image {path}: {e}")
+            print(f"Error loading media {path}: {e}")
 
     print(f"Calling Gemini API ({model_name})...")
     usage = None

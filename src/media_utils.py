@@ -4,6 +4,37 @@ import re
 from typing import List, Optional, Tuple
 
 
+import subprocess
+
+def extract_audio(media_path: str, output_path: str) -> bool:
+    """Extract audio from media file using ffmpeg."""
+    try:
+        # Check if output exists
+        if os.path.exists(output_path):
+            return True
+
+        # Run ffmpeg to extract audio (mp3 for compatibility)
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i", media_path,
+            "-vn", # No video
+            "-acodec", "libmp3lame",
+            "-q:a", "2", # High quality
+            output_path
+        ]
+        
+        print(f"Extracting audio to {output_path}...")
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"Error extracting audio: {e}")
+        return False
+    except FileNotFoundError:
+        print("Error: ffmpeg not found. Please install ffmpeg.")
+        return False
+
+
 def get_expected_output_dir(filename: str, base_dir: str) -> str:
     """Compute deterministic output folder name from media filename."""
     basename = os.path.basename(filename)

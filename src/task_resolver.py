@@ -3,9 +3,10 @@ import sys
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
+from tqdm import tqdm
 from grid_generator import generate_grids
 from hard_samples import run_spotter_dig_hard_samples
-from media_utils import find_target_folder, get_grid_files, parse_range
+from media_utils import find_target_folder, get_grid_files, parse_range, extract_audio
 
 
 @dataclass
@@ -135,21 +136,30 @@ def resolve_task_inputs(args, task_name: str, task_config: Dict, config_json: Di
             
         target_frames.sort()
         
-        ocr_frames_dir = os.path.join(folder_path, "ocr-frames")
-        os.makedirs(ocr_frames_dir, exist_ok=True)
+        ocr_input_dir = os.path.join(folder_path, "ocr-input")
+        os.makedirs(ocr_input_dir, exist_ok=True)
         
         image_paths = []
         
+        # Extract audio if enabled (defaulting to True as per user request to add this feature)
+        # We respect the config if present, but the user instruction implies this is a new default/feature.
+        # Check explicit False to disable.
+        if task_config.get("enable_audio", True):
+            audio_path = os.path.join(ocr_input_dir, "audio.mp3")
+            if extract_audio(media_path, audio_path):
+                image_paths.append(audio_path)
+                print(f"Included audio track: {audio_path}")
+
         print(f"Generating/Checking {len(target_frames)} frames for OCR...")
         
         extractor = FrameExtractor(media_path)
         frame_interval = max(1, int(round(extractor.fps / target_fps)))
         
-        for frame_id in target_frames:
+        for frame_id in tqdm(target_frames, desc="Generating OCR frames"):
             target_frame_idx = (frame_id - 1) * frame_interval
             timestamp = target_frame_idx / extractor.fps
             filename = f"frame_{frame_id}_{timestamp:.2f}.jpg"
-            filepath = os.path.join(ocr_frames_dir, filename)
+            filepath = os.path.join(ocr_input_dir, filename)
             
             if not os.path.exists(filepath):
                 extractor.cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame_idx)
@@ -163,7 +173,7 @@ def resolve_task_inputs(args, task_name: str, task_config: Dict, config_json: Di
             
         del extractor # Explicit cleanup
         
-        print(f"Prepared {len(image_paths)} frames in {ocr_frames_dir}")
+        print(f"Prepared {len(image_paths)} files in {ocr_input_dir}")
         return TaskInputs(folder_path, media_path, image_paths, rows, cols, target_fps)
 
     if media_path and os.path.exists(media_path):

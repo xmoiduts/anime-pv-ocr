@@ -3,6 +3,7 @@ import yaml
 import cv2
 import numpy as np
 from pathlib import Path
+from tqdm import tqdm
 from frame_extractor import FrameExtractor
 
 def imread_unicode(path):
@@ -62,37 +63,6 @@ def parse_selected_frames(yaml_path):
             selected.add(f_val)
     
     return selected
-
-def save_dig_hard_results(folder_path, hard_frames, output_image_paths):
-    """Save the list of hard frames to a YAML file for subsequent steps."""
-    results_dir = os.path.join(folder_path, "spotter-results")
-    os.makedirs(results_dir, exist_ok=True)
-    
-    # We use a distinct name for digger results
-    # TODO: Maybe align timestamp with the source spotter result? 
-    # For now, just use current timestamp or a fixed name pattern if we want to overwrite?
-    # Better to use a specific name that ocr-filtered can find.
-    
-    from datetime import datetime
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_file = os.path.join(results_dir, f"digger_results_{timestamp}.yaml")
-    
-    data = []
-    # Map image paths to frames? 
-    # The output_image_paths correspond to strips.
-    # We want to record the individual frames that were selected.
-    
-    for frame_id in hard_frames:
-        data.append({
-            "frame": frame_id,
-            "type": "hard_sample"
-        })
-        
-    with open(output_file, "w", encoding="utf-8") as f:
-        yaml.dump(data, f)
-    
-    print(f"Saved dig-hard results to {output_file}")
-    return output_file
 
 def run_spotter_dig_hard_samples(folder_path, media_path, task_config, target_fps, timestamp_suffix=None):
     yaml_path = find_latest_spotter_result(folder_path, timestamp_suffix)
@@ -166,7 +136,7 @@ def run_spotter_dig_hard_samples(folder_path, media_path, task_config, target_fp
     
     frame_interval = max(1, int(round(fps / target_fps)))
 
-    for i in range(num_output_images):
+    for i in tqdm(range(num_output_images), desc="Generating hard samples"):
         canvas = np.ones((canvas_h, canvas_w, 3), dtype=np.uint8) * 255
         
         batch_start = i * strips_per_image
@@ -222,9 +192,6 @@ def run_spotter_dig_hard_samples(folder_path, media_path, task_config, target_fp
         output_path = os.path.join(hard_samples_dir, output_name)
         FrameExtractor.imwrite_unicode(output_path, canvas)
         output_image_paths.append(output_path)
-        
-    # Save the YAML results
-    save_dig_hard_results(folder_path, hard_frames, output_image_paths)
         
     return output_image_paths
 

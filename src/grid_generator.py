@@ -4,6 +4,7 @@ from typing import Optional
 
 import cv2
 import numpy as np
+from tqdm import tqdm
 from frame_extractor import FrameExtractor
 
 def save_batch(
@@ -110,33 +111,36 @@ def generate_grids(media_path: str, output_dir: str, rows: int, cols: int, targe
     # Use the generator
     frame_gen = extractor.extract_frames(target_fps=target_fps)
     
-    for frame_info in frame_gen:
-        buffer.append({
-            "frame": frame_info.frame,
-            "index": frame_info.frame_id,
-            "timestamp": frame_info.timestamp
-        })
-        
-        if len(buffer) == cells_count:
-            save_batch(
-                buffer,
-                canvas_idx,
-                grids_dir,
-                cells_count,
-                rows,
-                cols,
-                canvas_w,
-                canvas_h,
-                cell_w,
-                cell_h,
-                img_area_w,
-                img_area_h,
-                margin,
-                text_h,
-                jpeg_quality,
-            )
-            buffer = []
-            canvas_idx += 1
+    with tqdm(total=expected_extracted, desc="Generating grids") as pbar:
+        for frame_info in frame_gen:
+            buffer.append({
+                "frame": frame_info.frame,
+                "index": frame_info.frame_id,
+                "timestamp": frame_info.timestamp
+            })
+            
+            if len(buffer) == cells_count:
+                save_batch(
+                    buffer,
+                    canvas_idx,
+                    grids_dir,
+                    cells_count,
+                    rows,
+                    cols,
+                    canvas_w,
+                    canvas_h,
+                    cell_w,
+                    cell_h,
+                    img_area_w,
+                    img_area_h,
+                    margin,
+                    text_h,
+                    jpeg_quality,
+                )
+                buffer = []
+                canvas_idx += 1
+            
+            pbar.update(1)
             
     if buffer:
         save_batch(

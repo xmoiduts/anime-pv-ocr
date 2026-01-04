@@ -17,6 +17,22 @@ For each subtitle found:
         -   `from`: (float) Start timestamp for high-res extraction.
         -   `to`: (float) End timestamp for high-res extraction.
         -   `fps`: (int, optional) Request specific FPS (default 6, valid: 6, 10, 15, 30). Use this if the animation is very fast.
+4.  `note`: (Optional) Additional info about the lyric/text nature.
+
+**Handling Audio-Visual Discrepancies [Optionally if exists audio]:**
+- **Audio has words (composed of characters), but Image doesn't (not every character shown or is unclear):**
+    - This suggests the visual subtitle might be obscured or appeared briefly between frames.
+    - **Action:** Use `expand_selection` covering the timestamp where the audio is heard.
+- **Image has words, but Audio doesn't (or doesn't match):**
+    - This suggests the text might be Credits (Staff/Cast), Key Visual text, Narration, or other non-lyric text.
+    - **Action:** Output the text in `lyric` but add a `note` field.
+    - Example:
+      ```yaml
+      - lyric: "Director: Alan Smithee"
+        found-timestamp: 12.50
+        note: cast
+      ```
+    - Valid values for note: `key-visual`, `cast`, `narration`, `other`.
 
 **Rules:**
 -   Only output valid YAML.
@@ -27,6 +43,7 @@ For each subtitle found:
 ```yaml
 - lyric: "君の瞳に恋してる"
   found-timestamp: 45.20
+  # blank line between lyric items
 - lyric: "Can't stop the feeling"
   found-timestamp: 48.50
   action:
@@ -34,5 +51,8 @@ For each subtitle found:
       from: 48.0
       to: 49.0
       fps: 15
+  # blank line between lyric items
+- lyric: "Produced by STUDIO NAME"
+  found-timestamp: 55.00
+  note: cast
 ```
-
