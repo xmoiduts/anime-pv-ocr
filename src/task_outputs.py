@@ -98,9 +98,83 @@ def save_dig_hard_output(inputs: TaskInputs, response_text: str) -> Optional[Pat
     return output_file
 
 
+def _normalize_ocr_items(raw_yaml: str, target_fps: float) -> List[Dict[str, Any]]:
+    """Normalize OCR output items, mapping timestamps to frame IDs."""
+    try:
+        data = yaml.safe_load(raw_yaml)
+    except Exception as e:
+        print(f"Warning: Failed to parse OCR YAML: {e}")
+        return []
+
+    if not isinstance(data, list):
+        print("Warning: OCR output is not a list; skip normalization.")
+        return []
+
+    normalized: List[Dict[str, Any]] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        
+        lyric = item.get("lyric")
+        found_timestamp = item.get("found-timestamp")
+        
+        if lyric is None or found_timestamp is None:
+            continue
+        
+        try:
+            ts = float(found_timestamp)
+        except (ValueError, TypeError):
+            continue
+        
+        # Map timestamp to frame_id: frame_id = floor(timestamp * target_fps) + 1
+        frame_id = int(ts * target_fps) + 1
+        
+        normalized_item: Dict[str, Any] = {
+            "frame": frame_id,
+            "timestamp": ts,
+            "lyric": str(lyric),
+        }
+        
+        # Preserve optional fields
+        if "note" in item:
+            normalized_item["note"] = item["note"]
+        if "action" in item:
+            normalized_item["action"] = item["action"]
+        
+        normalized.append(normalized_item)
+
+    return normalized
+
+
+def save_ocr_output(inputs: TaskInputs, response_text: str) -> Optional[Path]:
+    """Save OCR results to YAML file."""
+    folder_path = inputs.folder_path
+    if not folder_path:
+        print("Warning: No folder_path for OCR output; skip saving.")
+        return None
+
+    raw_yaml = _extract_yaml_block(response_text)
+    normalized_items = _normalize_ocr_items(raw_yaml, inputs.target_fps)
+
+    results_dir = _ensure_results_dir(folder_path)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = results_dir / f"ocr_results_{timestamp}.yaml"
+
+    if normalized_items:
+        with open(output_file, "w", encoding="utf-8") as f:
+            yaml.safe_dump(normalized_items, f, allow_unicode=True, sort_keys=False)
+        print(f"Saved OCR results to {output_file} ({len(normalized_items)} lyrics)")
+    else:
+        output_file.write_text(raw_yaml, encoding="utf-8")
+        print(f"Saved raw OCR output to {output_file} (could not normalize)")
+
+    return output_file
+
+
 TASK_OUTPUT_HANDLERS: Dict[str, TaskOutputHandler] = {
     "spotter": save_spotter_output,
     "dig-hard-samples": save_dig_hard_output,
+    "ocr-filtered": save_ocr_output,
 }
 
 

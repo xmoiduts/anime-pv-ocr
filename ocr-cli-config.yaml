@@ -76,6 +76,36 @@ task:
     media_resolution: MEDIA_RESOLUTION_HIGH
     folder: outputs/<media_name>/pyramid_712_3x4
 
+  make-comparison-videos:
+    # Standalone task: generates comparison video showing pipeline:all results.
+    # Does NOT pipe with other tasks; requires pipeline:all to be run first.
+    # Usage: python -m comparison_video.main -i <media_substring> [--preview]
+    # Preview controls: Press 'P'/SPACE to toggle preview, 'Q'/ESC to quit
+    target_fps: 6.0
+    stripping: 5
+    spotter_grid:
+      cols: 4
+      rows: 3
+    layout:
+      output_width: 1920
+      output_height: 1080
+      left_ratio: 0.4           # Left column: 40% width
+      left_top_ratio: 0.5       # Current frame: 50% of left height
+      right_top_ratio: 0.6      # Original video: 60% of right height
+      right_bottom_left_ratio: 0.5  # dig-hard strips: 50% of right-bottom width
+    effects:
+      fade_opacity: 0.5         # Opacity for unselected frames (transparent to white)
+      spotter_color: [0, 255, 0]    # Green (BGR) for spotter-selected frames
+      digger_color: [255, 0, 0]     # Blue (BGR) for digger-selected frames
+      highlight_color: [0, 0, 255]  # Red (BGR) for current time highlight
+      highlight_border_width: 3
+    preview:
+      enabled: false            # Default preview state (use --preview to enable)
+      scale: 0.5                # Preview window scale (0.5 = 50% of output size)
+    output_format: mp4
+    media_dir: medias
+    output_dir: outputs
+
 
 # Post-run behavior and pricing defaults
 runtime:
