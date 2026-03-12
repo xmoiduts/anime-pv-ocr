@@ -1,0 +1,2 @@
+"""Music transcription subproject."""
+

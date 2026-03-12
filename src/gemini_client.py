@@ -1,5 +1,5 @@
 import hashlib
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from tqdm import tqdm
 import google.genai as genai
@@ -35,6 +35,7 @@ def call_gemini(
     exchange_rate: float = 7.2,
     gemini_generation: Optional[float] = None,
     pricing_table: Optional[PricingTable] = None,
+    cancel_event: Optional[Any] = None,
 ) -> Optional[str]:
     """
     Invoke Gemini API with streaming response while preserving the project's
@@ -57,15 +58,25 @@ def call_gemini(
 
     print(f"Preparing to upload {len(image_paths)} media files (Per-part resolution: {use_per_part})...")
     for path in tqdm(image_paths, desc="Uploading media"):
+        if cancel_event and cancel_event.is_set():
+            raise KeyboardInterrupt("Gemini request cancelled before upload completed.")
         try:
             lower_path = path.lower()
-            if lower_path.endswith(('.mp3', '.wav', '.aiff', '.aac', '.ogg', '.flac')):
+            if lower_path.endswith(('.mp3', '.wav', '.m4a', '.aiff', '.aif', '.aac', '.ogg', '.flac')):
                 mime_type = "audio/mp3"
-                if lower_path.endswith('.wav'): mime_type = "audio/wav"
-                elif lower_path.endswith('.aac'): mime_type = "audio/aac"
-                elif lower_path.endswith('.ogg'): mime_type = "audio/ogg"
-                elif lower_path.endswith('.flac'): mime_type = "audio/flac"
-                
+                if lower_path.endswith('.wav'):
+                    mime_type = "audio/wav"
+                elif lower_path.endswith('.m4a'):
+                    mime_type = "audio/mp4"
+                elif lower_path.endswith(('.aiff', '.aif')):
+                    mime_type = "audio/aiff"
+                elif lower_path.endswith('.aac'):
+                    mime_type = "audio/aac"
+                elif lower_path.endswith('.ogg'):
+                    mime_type = "audio/ogg"
+                elif lower_path.endswith('.flac'):
+                    mime_type = "audio/flac"
+
                 with open(path, "rb") as f:
                     media_bytes = f.read()
                 part = types.Part.from_bytes(
@@ -111,6 +122,8 @@ def call_gemini(
             contents=contents,
             config=request_config,
         ):
+            if cancel_event and cancel_event.is_set():
+                raise KeyboardInterrupt("Gemini request cancelled while receiving response.")
             if chunk.usage_metadata:
                 usage = chunk.usage_metadata
 
@@ -159,6 +172,9 @@ def call_gemini(
 
         return full_text
 
+    except KeyboardInterrupt:
+        print("\nGemini request interrupted.")
+        raise
     except Exception as e:
         print(f"\nError calling Gemini API: {e}")
         return None
