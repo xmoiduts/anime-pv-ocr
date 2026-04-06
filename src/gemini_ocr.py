@@ -104,7 +104,7 @@ class WorkflowRuntime:
         base_url = self.resolve_base_url(task_config)
         gemini_generation = self.model_configs.get(model_name, {}).get("gemini-generation")
 
-        response_text = call_gemini(
+        result = call_gemini(
             self.api_key,
             model_name,
             plan.prompt,
@@ -117,6 +117,7 @@ class WorkflowRuntime:
             pricing_table=pricing_table,
         )
 
+        response_text = result.response_text if result else None
         if response_text and plan.output_handler:
             plan.output_handler(plan.inputs, response_text)
 

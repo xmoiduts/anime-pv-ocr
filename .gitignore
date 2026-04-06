@@ -8,6 +8,7 @@ __pycache__/
 .env
 
 # Media files
+!medias/placeholder.txt
 medias/
 *.mp4
 *.mkv

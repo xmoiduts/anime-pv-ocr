@@ -1,4 +1,8 @@
+import ctypes
 import hashlib
+import os
+import sys
+from dataclasses import dataclass
 from typing import Any, List, Optional
 
 from tqdm import tqdm
@@ -7,6 +11,9 @@ import google.genai.types as types
 from PIL import Image
 
 from config_loader import PricingTable
+
+ANSI_GRAY = "\033[90m"
+ANSI_RESET = "\033[0m"
 
 # Monkey-patch Pydantic models to allow extra fields (thinking_effort etc.)
 # because SDK version might trail behind API features.
@@ -24,6 +31,59 @@ for cls in [types.GenerateContentConfig, types.ThinkingConfig, types.Part]:
             pass
 
 
+@dataclass(frozen=True)
+class GeminiCallResult:
+    response_text: str
+    thought_text: str = ""
+    prompt_token_count: int = 0
+    candidate_token_count: int = 0
+
+
+def _enable_windows_ansi() -> bool:
+    if os.name != "nt":
+        return sys.stdout.isatty()
+    try:
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.GetStdHandle(-11)
+        if handle == 0:
+            return False
+        mode = ctypes.c_uint32()
+        if kernel32.GetConsoleMode(handle, ctypes.byref(mode)) == 0:
+            return False
+        enable_vt = 0x0004
+        if mode.value & enable_vt:
+            return True
+        return kernel32.SetConsoleMode(handle, mode.value | enable_vt) != 0
+    except Exception:
+        return False
+
+
+SUPPORTS_ANSI_COLOR = _enable_windows_ansi()
+
+
+def _stream_write(text: str, color: Optional[str] = None) -> None:
+    if not text:
+        return
+    payload = text
+    if color and SUPPORTS_ANSI_COLOR:
+        payload = f"{color}{text}{ANSI_RESET}"
+    try:
+        sys.stdout.write(payload)
+    except UnicodeEncodeError:
+        escaped = text.encode("unicode_escape").decode("ascii")
+        if color and SUPPORTS_ANSI_COLOR:
+            escaped = f"{color}{escaped}{ANSI_RESET}"
+        sys.stdout.write(escaped)
+    sys.stdout.flush()
+
+
+def _supports_thought_summaries(model_name: str, gemini_generation: Optional[float]) -> bool:
+    if gemini_generation is not None:
+        return gemini_generation >= 2.5
+    lowered_name = model_name.lower()
+    return lowered_name.startswith("gemini-3") or lowered_name.startswith("gemini-2.5")
+
+
 def call_gemini(
     api_key: str,
     model_name: str,
@@ -36,7 +96,7 @@ def call_gemini(
     gemini_generation: Optional[float] = None,
     pricing_table: Optional[PricingTable] = None,
     cancel_event: Optional[Any] = None,
-) -> Optional[str]:
+) -> Optional[GeminiCallResult]:
     """
     Invoke Gemini API with streaming response while preserving the project's
     existing calling semantics. Pricing calculation is configurable through
@@ -104,6 +164,7 @@ def call_gemini(
     print(f"Calling Gemini API ({model_name})...")
     usage = None
     full_text = ""
+    thought_text = ""
     try:
         request_config = {}
 
@@ -113,10 +174,13 @@ def call_gemini(
         t_level = thinking_level
         if t_level is not None:
             request_config["thinking_level"] = t_level
+        if _supports_thought_summaries(model_name, gemini_generation):
+            request_config["thinking_config"] = {"include_thoughts": True}
 
         if not request_config:
             request_config = None
 
+        active_stream = None
         for chunk in client.models.generate_content_stream(
             model=model_name,
             contents=contents,
@@ -132,8 +196,21 @@ def call_gemini(
                     if cand.content and cand.content.parts:
                         for part in cand.content.parts:
                             if part.text:
-                                print(part.text, end="", flush=True)
-                                full_text += part.text
+                                is_thought = bool(getattr(part, "thought", False))
+                                if is_thought:
+                                    if active_stream != "thought":
+                                        if active_stream is not None:
+                                            _stream_write("\n")
+                                        _stream_write("[Thinking]\n", color=ANSI_GRAY)
+                                        active_stream = "thought"
+                                    _stream_write(part.text, color=ANSI_GRAY)
+                                    thought_text += part.text
+                                else:
+                                    if active_stream == "thought":
+                                        _stream_write("\n[Response]\n")
+                                    active_stream = "answer"
+                                    _stream_write(part.text)
+                                    full_text += part.text
 
                             if hasattr(part, "thought_signature") and part.thought_signature:
                                 sig = part.thought_signature
@@ -144,7 +221,10 @@ def call_gemini(
                                     val = sig.hex()
                                 sig_sha1 = hashlib.sha1(val.encode("utf-8")).hexdigest()
                                 print(f"\n[Signature(SHA1): {sig_sha1}]", end="", flush=True)
-        print("\n")
+        if active_stream is not None:
+            _stream_write("\n\n")
+        else:
+            print("\n")
 
         if usage:
             prompt_tokens = usage.prompt_token_count or 0
@@ -170,7 +250,14 @@ def call_gemini(
 
             print(f"^^ {prompt_tokens} tk  v {candidate_tokens} tk  $ {cost_usd:.4f} Y {cost_rmb:.4f}")
 
-        return full_text
+        prompt_tokens = usage.prompt_token_count if usage and usage.prompt_token_count else 0
+        candidate_tokens = usage.candidates_token_count if usage and usage.candidates_token_count else 0
+        return GeminiCallResult(
+            response_text=full_text,
+            thought_text=thought_text,
+            prompt_token_count=prompt_tokens,
+            candidate_token_count=candidate_tokens,
+        )
 
     except KeyboardInterrupt:
         print("\nGemini request interrupted.")

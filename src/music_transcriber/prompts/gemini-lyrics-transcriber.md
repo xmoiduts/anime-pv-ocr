@@ -5,12 +5,10 @@ All attached media files belong to the same work. They may be alternate mixes, v
 Requirements:
 
 1. Output one clean LRC only.
-2. Do not duplicate lines just because the same lyric appears in multiple attached files.
-3. Prefer the clearest wording when different sources disagree.
-4. If a line is uncertain, still provide your best guess rather than leaving prose notes.
-5. Keep timestamps in chronological order.
-6. Use `[mm:ss.xx]` timestamps.
-7. No commentary outside the final code block.
+2. Keep timestamps in chronological order.
+3. Use `[mm:ss.xx]` timestamps.
+4. We need voice-envelope precise timestamp for the starting of each sentence.
+5. Sentence-breakingwise, we prefer half-sentence length.
 
 Output format:
 
@@ -18,3 +16,5 @@ Output format:
 [00:00.00]First lyric line
 [00:12.34]Second lyric line
 ```
+
+针对日英混合歌词，对日文不要转写为罗马音，按最可能出现在歌词中的方式输出。

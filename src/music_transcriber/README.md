@@ -33,7 +33,7 @@ python -m music_transcriber.main -L 2
 子项目自己的配置在 `src/music_transcriber/config.yaml`：
 
 ```yaml
-model: gemini-3.1-flash-lite-preview
+model: gemini-2.5-pro # this is better than all gen3 (and 3.1) series
 prompt_file: src/music_transcriber/prompts/gemini-lyrics-transcriber.md
 media_resolution: MEDIA_RESOLUTION_MEDIUM
 media_source_folder: 'C:\Users\40105\OneDrive\Codes\GenAI-related\msst-vocal-win-pyqt\output'
@@ -58,6 +58,8 @@ max_workers: 4
 - 每个作品只发起 1 次 Gemini 请求
 - 该请求会附带该作品文件夹内的全部受支持媒体文件
 - `--dry-run` 会打印排序结果、最新文件时间、命中的最新媒体文件名，但不会发请求
+
+> 之所以这样设计，是因为用于听写的歌曲通常不止一个文件，而是同时包含原声文件和人工处理后的人声文件。在姊妹项目 [msst-vocal-win-pyqt](https://github.com/xmoiduts/msst-vocal-win-pyqt) 中，我会将每首歌的处理结果打包到带时间戳的文件夹里，便于按时间倒序选取最新作品；较早的结果则可以自然保留，无需额外清理。
 
 ## 输出目录
 

@@ -1,7 +1,7 @@
 model: gemini-2.5-pro
 prompt_file: src/music_transcriber/prompts/gemini-lyrics-transcriber.md
 media_resolution: MEDIA_RESOLUTION_HIGH
-thinking_level: medium
+thinking_level: low
 # base_url: https://your-custom-proxy.example
 
 media_source_folder: 'C:\Users\40105\OneDrive\Codes\GenAI-related\msst-vocal-win-pyqt\output'

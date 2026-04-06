@@ -10,11 +10,31 @@ class SavedOutputs:
     lrc_path: Path
 
 
-def save_outputs(output_dir: Path, raw_response: str, raw_log_filename: str, lrc_filename: str) -> SavedOutputs:
+def build_raw_log_text(raw_response: str, thought_text: str = "") -> str:
+    if not thought_text or not thought_text.strip():
+        return raw_response or ""
+
+    sections = [
+        "===== Gemini Thought Summary =====",
+        thought_text.rstrip(),
+        "",
+        "===== Gemini Response =====",
+        (raw_response or "").rstrip(),
+    ]
+    return "\n".join(sections).rstrip() + "\n"
+
+
+def save_outputs(
+    output_dir: Path,
+    raw_response: str,
+    raw_log_filename: str,
+    lrc_filename: str,
+    thought_text: str = "",
+) -> SavedOutputs:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     raw_log_path = output_dir / raw_log_filename
-    raw_log_path.write_text(raw_response or "", encoding="utf-8")
+    raw_log_path.write_text(build_raw_log_text(raw_response, thought_text), encoding="utf-8")
 
     try:
         lrc_text = extract_lrc_text(raw_response)

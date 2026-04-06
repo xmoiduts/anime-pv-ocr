@@ -86,7 +86,7 @@ def _transcribe_job(
     _safe_print(
         f"[Start] {job.folder_name} -> {len(job.media_paths)} media file(s)"
     )
-    response_text = call_gemini(
+    result = call_gemini(
         runtime.api_key,
         runtime.local_config.model,
         prompt_text,
@@ -99,14 +99,15 @@ def _transcribe_job(
         pricing_table=runtime.pricing_table,
         cancel_event=cancel_event,
     )
-    if not response_text:
+    if not result or not result.response_text:
         raise RuntimeError(f"Gemini returned no text for '{job.folder_name}'.")
 
     outputs = save_outputs(
         job.output_dir,
-        response_text,
+        result.response_text,
         runtime.local_config.raw_log_filename,
         runtime.local_config.lrc_filename,
+        thought_text=result.thought_text,
     )
     return JobResult(job=job, outputs=outputs)
 
