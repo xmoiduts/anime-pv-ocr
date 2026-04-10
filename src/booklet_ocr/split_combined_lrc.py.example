@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""
+Split a combined booklet OCR LRC into one LRC file per song.
+
+Usage:
+    python src/booklet_ocr/split_combined_lrc.py.example outputs/booklet-ocr/20260408/20260408-153503.lyrics.lrc
+    python src/booklet_ocr/split_combined_lrc.py.example outputs/booklet-ocr/20260408/20260408-153503.lyrics.lrc --output-dir outputs/booklet-ocr/20260408/custom-split
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+from pathlib import Path
+
+
+TITLE_PATTERN = re.compile(r"^\[ti:(.*?)\]\r?\n", re.MULTILINE)
+INVALID_FILENAME_CHARS = set('<>:"/\\|?*')
+
+
+def sanitize_filename(name: str, fallback: str) -> str:
+    cleaned = "".join("_" if ch in INVALID_FILENAME_CHARS or ord(ch) < 32 else ch for ch in name)
+    cleaned = cleaned.strip().rstrip(".")
+    return cleaned or fallback
+
+
+def default_output_dir(input_path: Path) -> Path:
+    base_name = input_path.stem
+    if base_name.endswith(".lyrics"):
+        base_name = base_name[: -len(".lyrics")]
+    return input_path.parent / f"{base_name}.split-lrc"
+
+
+def split_lrc(input_path: Path, output_dir: Path) -> list[Path]:
+    text = input_path.read_text(encoding="utf-8")
+    matches = list(TITLE_PATTERN.finditer(text))
+    if not matches:
+        raise ValueError("No [ti:...] markers found in the input LRC.")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    written_files: list[Path] = []
+
+    for index, match in enumerate(matches, start=1):
+        start = match.start()
+        end = matches[index].start() if index < len(matches) else len(text)
+        chunk = text[start:end].strip("\r\n") + "\n"
+        title = match.group(1).strip()
+        safe_title = sanitize_filename(title, fallback=f"track_{index:02d}")
+        output_path = output_dir / f"{index:02d}. {safe_title}.lrc"
+        output_path.write_text(chunk, encoding="utf-8")
+        written_files.append(output_path)
+
+    return written_files
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Split a combined OCR LRC into per-song LRC files.")
+    parser.add_argument("input_lrc", type=Path, help="Path to the combined .lrc file.")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Optional output directory. Defaults to <input-prefix>.split-lrc next to the input file.",
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    input_path = args.input_lrc.resolve()
+    output_dir = args.output_dir.resolve() if args.output_dir else default_output_dir(input_path)
+
+    written_files = split_lrc(input_path, output_dir)
+    print(f"Wrote {len(written_files)} files to {output_dir}")
+    for path in written_files:
+        print(path.name)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -3,7 +3,7 @@ import hashlib
 import os
 import sys
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from tqdm import tqdm
 import google.genai as genai
@@ -60,6 +60,28 @@ def _enable_windows_ansi() -> bool:
 
 SUPPORTS_ANSI_COLOR = _enable_windows_ansi()
 
+AUDIO_MIME_TYPES = {
+    ".aac": "audio/aac",
+    ".aif": "audio/aiff",
+    ".aiff": "audio/aiff",
+    ".flac": "audio/flac",
+    ".m4a": "audio/mp4",
+    ".mp3": "audio/mpeg",
+    ".ogg": "audio/ogg",
+    ".wav": "audio/wav",
+}
+
+IMAGE_MIME_TYPES = {
+    ".bmp": "image/bmp",
+    ".gif": "image/gif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+    ".webp": "image/webp",
+}
+
 
 def _stream_write(text: str, color: Optional[str] = None) -> None:
     if not text:
@@ -84,6 +106,17 @@ def _supports_thought_summaries(model_name: str, gemini_generation: Optional[flo
     return lowered_name.startswith("gemini-3") or lowered_name.startswith("gemini-2.5")
 
 
+def _normalize_path_key(path: str) -> str:
+    return os.path.normcase(os.path.abspath(path))
+
+
+def _resolve_media_mime_type(path: str) -> str:
+    extension = os.path.splitext(path)[1].lower()
+    if extension in AUDIO_MIME_TYPES:
+        return AUDIO_MIME_TYPES[extension]
+    return IMAGE_MIME_TYPES.get(extension, "image/jpeg")
+
+
 def call_gemini(
     api_key: str,
     model_name: str,
@@ -96,6 +129,7 @@ def call_gemini(
     gemini_generation: Optional[float] = None,
     pricing_table: Optional[PricingTable] = None,
     cancel_event: Optional[Any] = None,
+    per_file_media_resolution: Optional[Dict[str, str]] = None,
 ) -> Optional[GeminiCallResult]:
     """
     Invoke Gemini API with streaming response while preserving the project's
@@ -114,7 +148,12 @@ def call_gemini(
     contents = [prompt]
 
     is_gemini_3_plus = gemini_generation is not None and gemini_generation >= 3
-    use_per_part = is_gemini_3_plus and media_resolution is not None
+    normalized_resolution_map = {
+        _normalize_path_key(path): level
+        for path, level in (per_file_media_resolution or {}).items()
+        if level
+    }
+    use_per_part = is_gemini_3_plus and (media_resolution is not None or bool(normalized_resolution_map))
 
     print(f"Preparing to upload {len(image_paths)} media files (Per-part resolution: {use_per_part})...")
     for path in tqdm(image_paths, desc="Uploading media"):
@@ -123,20 +162,7 @@ def call_gemini(
         try:
             lower_path = path.lower()
             if lower_path.endswith(('.mp3', '.wav', '.m4a', '.aiff', '.aif', '.aac', '.ogg', '.flac')):
-                mime_type = "audio/mp3"
-                if lower_path.endswith('.wav'):
-                    mime_type = "audio/wav"
-                elif lower_path.endswith('.m4a'):
-                    mime_type = "audio/mp4"
-                elif lower_path.endswith(('.aiff', '.aif')):
-                    mime_type = "audio/aiff"
-                elif lower_path.endswith('.aac'):
-                    mime_type = "audio/aac"
-                elif lower_path.endswith('.ogg'):
-                    mime_type = "audio/ogg"
-                elif lower_path.endswith('.flac'):
-                    mime_type = "audio/flac"
-
+                mime_type = _resolve_media_mime_type(path)
                 with open(path, "rb") as f:
                     media_bytes = f.read()
                 part = types.Part.from_bytes(
@@ -147,13 +173,17 @@ def call_gemini(
                 continue
 
             if use_per_part:
+                mime_type = _resolve_media_mime_type(path)
+                resolution_level = normalized_resolution_map.get(_normalize_path_key(path), media_resolution)
                 with open(path, "rb") as f:
                     img_bytes = f.read()
-                part = types.Part.from_bytes(
+                part_kwargs = dict(
                     data=img_bytes,
-                    mime_type="image/jpeg",
-                    media_resolution={"level": media_resolution},
+                    mime_type=mime_type,
                 )
+                if resolution_level is not None:
+                    part_kwargs["media_resolution"] = {"level": resolution_level}
+                part = types.Part.from_bytes(**part_kwargs)
                 contents.append(part)
             else:
                 img = Image.open(path)
@@ -248,7 +278,7 @@ def call_gemini(
                 except UnicodeEncodeError:
                     print(f"IMG {num_images} images | Avg ~{avg_img_tokens:.1f} tk/img (total prompt / image count)")
 
-            print(f"^^ {prompt_tokens} tk  v {candidate_tokens} tk  $ {cost_usd:.4f} Y {cost_rmb:.4f}")
+            print(f"↑↑ {prompt_tokens} tk  ↓ {candidate_tokens} tk  $ {cost_usd:.4f} ￥ {cost_rmb:.4f}")
 
         prompt_tokens = usage.prompt_token_count if usage and usage.prompt_token_count else 0
         candidate_tokens = usage.candidates_token_count if usage and usage.candidates_token_count else 0

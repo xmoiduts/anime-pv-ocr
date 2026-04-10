@@ -88,3 +88,8 @@ Usage see as src/music_transcriber/README.md
 Visualizes the output of pipeline:all tasks.
 
 Usage see as src/comparison_video/README.md
+
+## Lyric Booklet OCR
+Extract lyric text from lyric booklet images.
+
+Usage see as src/booklet_ocr/README.md
