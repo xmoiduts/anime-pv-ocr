@@ -26,3 +26,14 @@ pixel_threshold_for_ultra_high: 600000
 thinking_level: low
 default_lookback_minutes: 30 # for the one-click workflow: ocr_workflow.py
 # base_url: https://your-custom-proxy.example
+
+
+#-----------
+# Gemma4 usage:
+# Gemma4 can be used for this task, output quality limited.
+#   model: gemma-4-31b-it
+#   thinking_level: high # you need to enable this otherwise this model will be instruct model.
+# media resolution doesn't seem to be effective, though it supports \
+# 70 / 140 / 280 / 560 / 1120 tokens per image, setting gemini sdk to \
+# high and ultra high seems to both result in 256 tokens per img, which \
+# is insufficient for this task, we need 1120 tk per high quality image 
