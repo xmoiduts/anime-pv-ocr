@@ -11,9 +11,9 @@ Goals:
 5. If a title or lyric segment is uncertain, keep the best guess but note uncertainty in YAML.
 6. If a song title is written in kana but is clearly spelling a non-Japanese word or loanword, add a YAML field with the most likely intended real-word spelling. This field is only for editor autocomplete hints and does not need to be present when not applicable.
 
-Output exactly two fenced code blocks and nothing else.
+Output exactly one fenced YAML code block and nothing else.
 
-First block: YAML.
+The Python workflow will generate downstream LRC text from this YAML, so do not output an LRC block.
 
 ```yaml
 songs:
@@ -22,15 +22,4 @@ songs:
     title_guess_confidence: high
     lyrics: |
       ...
-```
-
-Second block: LRC-like plain lyric text for downstream tools.
-
-```lrc
-[ti:Song Title]
-First lyric line
-Second lyric line
-
-[ti:Next Song]
-Another lyric line
 ```

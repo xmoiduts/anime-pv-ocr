@@ -35,7 +35,10 @@ class LocalConfig:
     model: str
     prompt_file: str
     input_source_folder: str
-    supported_media_extensions: List[str]
+    supported_media_extensions: List[str]  # required fields above, optional below
+    finishing_ocr_folder: str = ""
+    done_folder: str = ""
+    default_lookback_minutes: int = 30
     output_root: str = "outputs/booklet-ocr"
     raw_log_suffix: str = "response_raw.log"
     yaml_suffix: str = "lyrics.yaml"
@@ -99,6 +102,9 @@ def load_local_config(path: Optional[str] = None) -> tuple[LocalConfig, Path]:
         or "MEDIA_RESOLUTION_ULTRA_HIGH",
         thinking_level=raw.get("thinking_level"),
         base_url=raw.get("base_url"),
+        finishing_ocr_folder=str(raw.get("finishing_ocr_folder", "")).strip() or "",
+        done_folder=str(raw.get("done_folder", "")).strip() or "",
+        default_lookback_minutes=max(1, int(raw.get("default_lookback_minutes", 30))),
     )
     return local_config, config_path
 

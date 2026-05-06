@@ -7,7 +7,6 @@ from typing import Optional, Sequence
 import yaml
 
 YAML_FENCE_RE = re.compile(r"```(?:yaml|yml)\s*\n(.*?)\n```", re.DOTALL)
-LRC_FENCE_RE = re.compile(r"```(?:lrc|LRC)\s*\n(.*?)\n```", re.DOTALL)
 GENERIC_FENCE_RE = re.compile(r"```(?:[^\n`]*)\n(.*?)\n```", re.DOTALL)
 
 
@@ -74,25 +73,37 @@ def extract_yaml_text(response_text: str) -> str:
     raise ValueError("Could not extract a YAML block from the Gemini response.")
 
 
-def extract_lrc_text(response_text: str) -> str:
-    if not response_text or not response_text.strip():
-        raise ValueError("Gemini response is empty.")
+def yaml_text_to_lrc_text(yaml_text: str) -> str:
+    try:
+        parsed = yaml.safe_load(yaml_text)
+    except Exception as exc:
+        raise ValueError(f"Could not parse YAML output: {exc}") from exc
 
-    match = LRC_FENCE_RE.search(response_text)
-    if match:
-        normalized = _normalize_block(match.group(1))
-        if normalized.strip():
-            return normalized
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("songs"), list):
+        raise ValueError("YAML output must contain a top-level 'songs' list.")
 
-    generic_blocks = []
-    for match in GENERIC_FENCE_RE.finditer(response_text):
-        candidate = _normalize_block(match.group(1))
-        if candidate.strip():
-            generic_blocks.append(candidate)
-    if len(generic_blocks) >= 2:
-        return generic_blocks[1]
+    song_blocks: list[str] = []
+    for index, song in enumerate(parsed["songs"], start=1):
+        if not isinstance(song, dict):
+            raise ValueError(f"Song entry #{index} must be a mapping.")
 
-    raise ValueError("Could not extract an LRC block from the Gemini response.")
+        title = str(song.get("title") or "").strip()
+        lyrics = song.get("lyrics") or ""
+        if not title:
+            title = f"Untitled {index}"
+        if not isinstance(lyrics, str):
+            raise ValueError(f"Song entry #{index} has non-text lyrics.")
+
+        lyric_text = _normalize_block(lyrics).rstrip()
+        block = f"[ti:{title}]"
+        if lyric_text:
+            block = f"{block}\n{lyric_text}"
+        song_blocks.append(block)
+
+    if not song_blocks:
+        raise ValueError("YAML output contains no songs.")
+
+    return "\n\n".join(song_blocks).rstrip() + "\n"
 
 
 def create_output_dir(
@@ -124,7 +135,7 @@ def save_outputs(
 
     try:
         yaml_text = extract_yaml_text(raw_response)
-        lrc_text = extract_lrc_text(raw_response)
+        lrc_text = yaml_text_to_lrc_text(yaml_text)
     except Exception as exc:
         raise ValueError(
             f"Saved raw response to {raw_log_path}, but failed to extract structured outputs: {exc}"

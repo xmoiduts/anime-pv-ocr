@@ -16,8 +16,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from booklet_ocr.config import MODULE_NAME, load_runtime_context, resolve_project_path
 from booklet_ocr.input_listing import build_input_listing
 from booklet_ocr.io_utils import create_output_dir, save_outputs
-from gemini_client import call_gemini
 from prompt_builder import build_prompt
+from provider.gemini import call_gemini
 
 
 def _safe_print(message: str) -> None:

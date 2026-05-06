@@ -1,6 +1,8 @@
 model: gemini-3-flash-preview
-prompt_file: src/booklet_ocr/prompts/gemini-booklet-ocr.md
-input_source_folder: ../lyric-booklets/pending-OCR # relative path to project root
+prompt_file: src/booklet_ocr/prompts/gemini-booklet-ocr.md # relative path to project root
+input_source_folder: ../lyric-booklets/pending-OCR # relative path to project root (anime-pv-ocr/)
+finishing_ocr_folder: ../lyric-booklets/finishing-OCR # relative path to project root
+done_folder: ../lyric-booklets/Done # relative path to project root
 
 supported_media_extensions:
   - .jpg
@@ -19,7 +21,8 @@ lrc_suffix: lyrics.lrc
 warn_file_count_over: 20
 small_image_media_resolution: MEDIA_RESOLUTION_HIGH
 large_image_media_resolution: MEDIA_RESOLUTION_ULTRA_HIGH
-pixel_threshold_for_ultra_high: 6000000
+pixel_threshold_for_ultra_high: 600000
 
 thinking_level: low
+default_lookback_minutes: 30 # for the one-click workflow: ocr_workflow.py
 # base_url: https://your-custom-proxy.example
